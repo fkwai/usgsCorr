@@ -12,33 +12,41 @@ from sklearn.cluster import Birch
 
 from sklearn import tree
 from sklearn.naive_bayes import GaussianNB
-
+from sklearn import svm
+from sklearn.linear_model import SGDClassifier
 
 from sklearn import preprocessing
 
-### read data
-UCdir = "Y:\Kuai\USGSCorr\\"
-UCfile=UCdir+"usgsCorr_maxmin.mat"
-Datafile=UCdir+"dataset2.mat"
-mat = sio.loadmat(UCfile)
-UCData=mat['Corr_maxmin']
-id1=mat['ID']
-id1.reshape(len(id1),)  # change to 1d array in case of further trouble
-mat = sio.loadmat(Datafile)
-AttrData=mat['dataset']
-id2=mat['ID']
-id2.reshape(len(id2),)  # change to 1d array in case of further trouble
+# ### read data
+# UCdir = "Y:\Kuai\USGSCorr\\"
+# UCfile=UCdir+"usgsCorr_maxmin.mat"
+# Datafile=UCdir+"dataset2.mat"
+# mat = sio.loadmat(UCfile)
+# UCData=mat['Corr_maxmin']
+# id1=mat['ID']
+# id1.reshape(len(id1),)  # change to 1d array in case of further trouble
+# mat = sio.loadmat(Datafile)
+# AttrData=mat['dataset']
+# id2=mat['ID']
+# id2.reshape(len(id2),)  # change to 1d array in case of further trouble
+#
+# id=np.intersect1d(id1,id2)
+# ind1=np.zeros((len(id),),int)
+# ind2=np.zeros((len(id),),int)
+# for i in range(len(id)):
+#    ind1[i]=(id[i]==id1).nonzero()[0]
+#    ind2[i]=(id[i]==id2).nonzero()[0]
 
-id=np.intersect1d(id1,id2)
-ind1=np.zeros((len(id),),int)
-ind2=np.zeros((len(id),),int)
-for i in range(len(id)):
-   ind1[i]=(id[i]==id1).nonzero()[0]
-   ind2[i]=(id[i]==id2).nonzero()[0]
+### read departure data
+filename="Y:\Kuai\USGSCorr\dataset_departure.mat"
+mat = sio.loadmat(filename)
+X=mat["X"]
+XX=mat["XX"]
 
 ### preprocessing
-X=UCData[ind1,]
-XX=AttrData[ind2,0:52]
+# X=UCData[ind1,]
+# XX=AttrData[ind2,0:51]
+#XX=XX[:,0:51]
 XX[np.isnan(XX)]=0
 scaler=preprocessing.StandardScaler().fit(XX)
 XXn=scaler.fit_transform(XX)
@@ -66,7 +74,7 @@ af.fit(X)
 SSRS.clusterplot(X,lable=af.labels_)
 
 # birch
-brc = Birch(branching_factor=10, n_clusters=6, threshold=0.6,compute_labels=True)
+brc = Birch(branching_factor=10, n_clusters=6, threshold=0.5,compute_labels=True)
 brc.fit(X)
 SSRS.clusterplot(X,lable=brc.labels_)
 
@@ -82,5 +90,15 @@ SSRS.plotErrorMap(T,Tp)
 
 # GaussianNB
 model=GaussianNB()
+Tp=SSRS.ClusterLearn_cross(XXn,T,nfold,model)
+SSRS.plotErrorMap(T,Tp)
+
+# SVM
+model=svm.SVC()
+Tp=SSRS.ClusterLearn_cross(XXn,T,nfold,model)
+SSRS.plotErrorMap(T,Tp)
+
+# SGD
+model = SGDClassifier()
 Tp=SSRS.ClusterLearn_cross(XXn,T,nfold,model)
 SSRS.plotErrorMap(T,Tp)
