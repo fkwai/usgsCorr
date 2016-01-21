@@ -53,31 +53,30 @@ XXn=scaler.fit_transform(XX)
 
 ### cluster
 # kmeans
-kmeans = KMeans(init='k-means++', n_clusters=6, n_init=10,max_iter=1000)
+kmeans = KMeans(init='k-means++', n_clusters=5, n_init=10,max_iter=1000)
 kmeans.fit(X)
-SSRS.clusterplot(X,lable=kmeans.labels_,center=kmeans.cluster_centers_)
+SSRS.clusterplot(X,label=kmeans.labels_,center=kmeans.cluster_centers_)
 
-# dbscan
-db = DBSCAN(eps=0.1, min_samples=50).fit(X)
-nclass = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
-SSRS.clusterplot(X,lable=db.labels_+1)
-
-# mean shift
-bandwidth = estimate_bandwidth(X, quantile=0.1, n_samples=100)
-ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
-ms.fit(X)
-print(np.bincount(ms.labels_+1))
-
-# affinity propagation
-af = AffinityPropagation(preference=-150,verbose=True)
-af.fit(X)
-SSRS.clusterplot(X,lable=af.labels_)
+# # dbscan
+# db = DBSCAN(eps=0.1, min_samples=50).fit(X)
+# nclass = len(set(db.labels_)) - (1 if -1 in db.labels_ else 0)
+# SSRS.clusterplot(X,lable=db.labels_+1)
+#
+# # mean shift
+# bandwidth = estimate_bandwidth(X, quantile=0.1, n_samples=100)
+# ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
+# ms.fit(X)
+# print(np.bincount(ms.labels_+1))
+#
+# # affinity propagation
+# af = AffinityPropagation(preference=-150,verbose=True)
+# af.fit(X)
+# SSRS.clusterplot(X,lable=af.labels_)
 
 # birch
-brc = Birch(branching_factor=10, n_clusters=6, threshold=0.5,compute_labels=True)
+brc = Birch(branching_factor=10, n_clusters=4, threshold=0.3,compute_labels=True)
 brc.fit(X)
-SSRS.clusterplot(X,lable=brc.labels_)
-
+SSRS.clusterplot(X,label=brc.labels_)
 
 
 ### training

@@ -2,21 +2,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+from sklearn import metrics
 
-def clusterplot(data,lable,center=[]):
-    nclass=len(np.unique(lable))
-    nind_class=np.bincount(lable)
+
+def clusterplot(data,label,center=[]):
+    nclass=len(np.unique(label))
+    nind_class=np.bincount(label)
     sortind=np.argsort(nind_class)[::-1]
+    score=metrics.silhouette_score(data,label)
+
     if nclass>10:
         n=10
     else:
         n=nclass
     f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
+    plt.suptitle('Silhouette Coefficient=%s'%score)
     for i in range(n):
         ind=sortind[i]
         pj=int(np.ceil(i/2))
         pi=int(i%2)
-        axarr[pj, pi].boxplot(data[lable==ind])
+        axarr[pj, pi].boxplot(data[label==ind])
         axarr[pj, pi].set_title('cluster %s, nind=%s'%(ind+1,nind_class[ind]))
         axarr[pj, pi].set_ylim([-1,1])
         if len(center)>0:
