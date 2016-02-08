@@ -142,3 +142,12 @@ SSRS.plotErrorMap(T,Tp)
 Y2 = manifold.Isomap(10, 2).fit_transform(X2n)
 Y = manifold.Isomap(10, 2).fit_transform(X)
 plt.plot(Y2[:,0],Y2[:,1],'*')
+
+mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9,
+                   dissimilarity="precomputed", n_jobs=1)
+D = metrics.euclidean_distances(X)
+mds.fit(D)
+Y=mds.embedding_
+stress=mds.stress_
+
+np.savetxt("fitMDS.csv",mds.embedding_, delimiter=",")
