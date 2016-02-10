@@ -10,7 +10,7 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import MeanShift, estimate_bandwidth
 from sklearn.cluster import AffinityPropagation
-from sklearn.cluster import Birch
+# from sklearn.cluster import Birch
 
 from sklearn import tree
 from sklearn.naive_bayes import GaussianNB

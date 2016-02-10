@@ -5,7 +5,14 @@ import random
 from sklearn import metrics
 
 
-def clusterplot(data,label,center=[]):
+def Cluster(data,model):
+    model.fit(data)
+    label=model.labels_
+    if hasattr(model, 'cluster_centers_'):
+        center=model.cluster_centers_
+    else:
+        center=[]
+
     nclass=len(np.unique(label))
     nind_class=np.bincount(label)
     sortind=np.argsort(nind_class)[::-1]
@@ -26,9 +33,10 @@ def clusterplot(data,label,center=[]):
         axarr[pj, pi].set_ylim([-1,1])
         if len(center)>0:
             axarr[pj, pi].plot(center[ind,],'*-r')
+    return label
 
 ### training
-def ClusterLearn_cross(XXn,T,nfold,model):
+def Classification_cross(XXn,T,nfold,model):
     indran=range(len(T))
     random.shuffle(indran)
     indran=np.asarray(indran)
@@ -73,3 +81,37 @@ def plotErrorMap(T,Tp):
     ncorrect=np.sum(errormap[range(nclass),range(nclass)])
     accu=float(ncorrect)/float(len(T))
     plt.title("total accuracy %.3f"%accu)
+
+
+def devideset(n,rate=0.2):
+    indran=range(n)
+    random.shuffle(indran)
+    indran=np.asarray(indran)
+    ind=int(np.round(n*rate))
+    ind1=indran[range(0,ind,1)]
+    ind2=indran[range(ind+1,n,1)]
+    return(ind1,ind2)
+
+
+def RegressionLearn(Y,X,prec,regModel):
+    nind=Y.shape[0]
+    nband=Y.shape[1]
+    nattr=X.shape[1]
+
+    [indtest,indtrain]=devideset(nind,prec)
+    Ytest=Y[indtest,:]
+    Xtest=X[indtest,:]
+    Ytrain=Y[indtrain,:]
+    Xtrain=X[indtrain,:]
+
+    rmse_band=np.zeros([nband,1])
+    Yp=np.zeros((len(indtest),nband))
+
+    for i in range(0, nband, 1):
+        print("regressing band %i"%i)
+        regModel.fit(Xtrain, Ytrain[:,i])
+        Yp[:,i] = regModel.predict(Xtest)
+        rmse_band[i] = np.sqrt(np.mean((Yp[:,i] - Ytest[:,i])**2, axis=0))
+    plt.boxplot(Yp-Ytest)
+    plt.title("Pred - Truth, total rmse %.3f"%np.mean(rmse_band))
+    return (rmse_band,Yp,Ytest)
