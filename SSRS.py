@@ -5,17 +5,24 @@ import random
 from sklearn import metrics
 
 
-def Cluster(data,model):
+def Cluster(data,model,doplot=1):
     model.fit(data)
     label=model.labels_
     if hasattr(model, 'cluster_centers_'):
         center=model.cluster_centers_
     else:
         center=[]
+    if doplot==1:
+        cluster_plot(data,label,center)
+    return label,center
 
+def cluster_plot(data,label,center,rank=0):
     nclass=len(np.unique(label))
     nind_class=np.bincount(label)
-    sortind=np.argsort(nind_class)[::-1]
+    if rank==1:
+        sortind=np.argsort(nind_class)[::-1]
+    else:
+        sortind=range(0,nclass)
     score=metrics.silhouette_score(data,label)
 
     if nclass>10:
@@ -23,17 +30,59 @@ def Cluster(data,model):
     else:
         n=nclass
     f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
+    f.tight_layout()
+    f.subplots_adjust(top=0.9)
     plt.suptitle('Silhouette Coefficient=%s'%score)
     for i in range(n):
         ind=sortind[i]
         pj=int(np.ceil(i/2))
         pi=int(i%2)
         axarr[pj, pi].boxplot(data[label==ind])
-        axarr[pj, pi].set_title('cluster %s, nind=%s'%(ind+1,nind_class[ind]))
+        axarr[pj, pi].set_title('cluster %s, nind=%s'%(ind,nind_class[ind]))
         axarr[pj, pi].set_ylim([-1,1])
         if len(center)>0:
-            axarr[pj, pi].plot(center[ind,],'*-r')
-    return label
+            axarr[pj, pi].plot(range(1,31),center[ind,],'*-r')
+
+def cluster_rename(label,ythe,Cpca,center=[]):
+    #ythe=np.array([0.5])
+    lab0=label
+    nind=len(label)
+    nc=len(np.unique(label))
+
+    lab1=label*0-1
+    labind1=np.zeros([nc])-1
+    Cpcanew=Cpca*0;
+    centernew=center*0
+
+    #figure out labind1
+    n=0
+    for i in range(0,len(ythe)):
+        if i==0:
+            ind1=np.where(Cpca[:,1]<ythe[i])[0]
+        else:
+            ind1=np.where(Cpca[:,1]<ythe[i]&Cpca[:,1]>ythe[i-1])[0]
+        n1=len(ind1)
+        x1=Cpca[ind1,0]
+        indtemp=ind1[np.argsort(x1)]
+        labind1[indtemp]=range(n,n+n1)
+        n=n+n1
+    ind2=np.where(Cpca[:,1]>ythe[len(ythe)-1])[0]
+    n2=len(ind2)
+    x2=Cpca[ind2,0]
+    indtemp=ind2[np.argsort(x2)]
+    labind1[indtemp]=range(n,n+n2)
+    n=n+n2
+    #resign label
+    for i in range(0,nc):
+        ind=np.where(lab0==i)
+        labnew=labind1[i]
+        lab1[ind]=labnew
+        Cpcanew[labnew,:]=Cpca[i,:]
+        if len(center)>0:
+            centernew[labnew,:]=center[i,:]
+
+    return lab1,Cpcanew,centernew
+
 
 ### training
 def Classification_cross(XXn,T,nfold,model):
@@ -115,3 +164,23 @@ def RegressionLearn(Y,X,prec,regModel):
     plt.boxplot(Yp-Ytest)
     plt.title("Pred - Truth, total rmse %.3f"%np.mean(rmse_band))
     return (rmse_band,Yp,Ytest)
+
+def DistPlot(Xn,dist,figname,field):
+    nind,nattr=Xn.shape
+    nind,nc=dist.shape
+    for j in range(nattr):
+        plt.close('all')
+        f, axarr = plt.subplots(int(np.ceil(nc / 2)), 2)
+        f.tight_layout()
+        f.subplots_adjust(top=0.9)
+        ff=field[j].tolist()
+        ff=ff[0]
+        plt.suptitle('%s'%ff)
+        for i in range(nc):
+            pj = int(np.ceil(i / 2))
+            pi = int(i % 2)
+            axarr[pj, pi].plot(Xn[:,j],dist[:,i],'.')
+            cf=np.corrcoef(Xn[:,j],dist[:,i])
+            axarr[pj, pi].set_title('cluster %s, coef=%.3f' % (i + 1, cf[0,1]))
+        figfile=figname+'%s'%j
+        plt.savefig(figfile)

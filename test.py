@@ -27,28 +27,16 @@ import SSRS
 
 ### read data
 UCdir = "Y:\Kuai\USGSCorr\\"
-UCfile=UCdir+"usgsCorr_maxmin.mat"
+UCfile=UCdir+"usgsCorr2.mat"
 Datafile=UCdir+"dataset2.mat"
 mat = sio.loadmat(UCfile)
 UCData=mat['Corr_maxmin']
-id1=mat['ID']
-id1.reshape(len(id1),)  # change to 1d array in case of further trouble
 mat = sio.loadmat(Datafile)
 AttrData=mat['dataset']
-id2=mat['ID']
-id2.reshape(len(id2),)  # change to 1d array in case of further trouble
-
-id=np.intersect1d(id1,id2)
-ind1=np.zeros((len(id),),int)
-ind2=np.zeros((len(id),),int)
-for i in range(len(id)):
-   ind1[i]=(id[i]==id1).nonzero()[0]
-   ind2[i]=(id[i]==id2).nonzero()[0]
 
 ## preprocessing
-X=UCData[ind1,]
-XX=AttrData[ind2,0:51]
-XX=XX[:,0:51]
+X=UCData
+XX=AttrData[:,0:51]
 XX[np.isnan(XX)]=0
 scaler=preprocessing.StandardScaler().fit(XX)
 XXn=scaler.fit_transform(XX)
