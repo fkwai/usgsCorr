@@ -2,7 +2,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import math
 from sklearn import metrics
+
+import plotFun
 
 
 def Cluster(data,model,doplot=1):
@@ -13,13 +16,13 @@ def Cluster(data,model,doplot=1):
     else:
         center=[]
     if doplot==1:
-        cluster_plot(data,label,center)
+        Cluster_plot(data,label,center)
     return label,center
 
-def cluster_plot(data,label,center,rank=0):
+def Cluster_plot(data,label,center,rank=0):
     nclass=len(np.unique(label))
     nind_class=np.bincount(label)
-    if rank==1:
+    if rank==1: # rank subfigures based on # of ind of each clusters
         sortind=np.argsort(nind_class)[::-1]
     else:
         sortind=range(0,nclass)
@@ -43,7 +46,8 @@ def cluster_plot(data,label,center,rank=0):
         if len(center)>0:
             axarr[pj, pi].plot(range(1,31),center[ind,],'*-r')
 
-def cluster_rename(label,ythe,Cpca,center=[]):
+def Cluster_rename(label,ythe,Cpca,center=[]):
+    #rename Clusters based on 2 PCA of centers.
     #ythe=np.array([0.5])
     lab0=label
     nind=len(label)
@@ -83,8 +87,6 @@ def cluster_rename(label,ythe,Cpca,center=[]):
 
     return lab1,Cpcanew,centernew
 
-
-### training
 def Classification_cross(XXn,T,nfold,model):
     indran=range(len(T))
     random.shuffle(indran)
@@ -104,7 +106,6 @@ def Classification_cross(XXn,T,nfold,model):
         model = model.fit(X0, T0)
         Tp[ind]=model.predict(X1)
     return Tp
-
 
 def plotErrorMap(T,Tp):
     #error map and performance plot
@@ -131,7 +132,6 @@ def plotErrorMap(T,Tp):
     accu=float(ncorrect)/float(len(T))
     plt.title("total accuracy %.3f"%accu)
 
-
 def devideset(n,rate=0.2):
     indran=range(n)
     random.shuffle(indran)
@@ -141,8 +141,7 @@ def devideset(n,rate=0.2):
     ind2=indran[range(ind+1,n,1)]
     return(ind1,ind2)
 
-
-def RegressionLearn(Y,X,prec,regModel):
+def Regression(Y,X,prec,regModel,doplot=0):
     nind=Y.shape[0]
     nband=Y.shape[1]
     nattr=X.shape[1]
@@ -161,11 +160,136 @@ def RegressionLearn(Y,X,prec,regModel):
         regModel.fit(Xtrain, Ytrain[:,i])
         Yp[:,i] = regModel.predict(Xtest)
         rmse_band[i] = np.sqrt(np.mean((Yp[:,i] - Ytest[:,i])**2, axis=0))
-    plt.boxplot(Yp-Ytest)
-    plt.title("Pred - Truth, total rmse %.3f"%np.mean(rmse_band))
-    return (rmse_band,Yp,Ytest)
+    Regression_plot(Yp,Ytest,doplot)
+    return (Yp,Ytest,rmse_band)
+
+def Regression_plot(Yp,Ytest,doplot):
+    nband=Yp.shape[1]
+    if doplot==1:   # box plot for all bands
+        plt.boxplot(Yp-Ytest)
+        #plt.title("Pred - Truth, total rmse %.3f"%np.mean(rmse_band))
+    elif doplot==2:
+        n=nband
+        f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
+        f.tight_layout()
+        f.subplots_adjust(top=0.9)
+        #plt.suptitle('Silhouette Coefficient=%s'%score)
+        for i in range(n):
+            pj=int(np.ceil(i/2))
+            pi=int(i%2)
+            axarr[pj, pi].plot(Ytest[:,i],Yp[:,i],'.')
+            axarr[pj, pi].set_title('cluster %s, corrcoef=%.3f'\
+                                    %(i,np.corrcoef(Ytest[:,i],Yp[:,i])))
+            plotFun.plot121line(axarr[pj, pi])
+
+def FeatureSelectForward(X_train,Y_train,X_test,Y_test,model):
+    X_all=np.append(X_train,X_test,axis=0)
+    Y_all=np.append(Y_train,Y_test,axis=0)
+    nattr=X_train.shape[1]
+    attr_sel=[]
+    attr_rem=range(0,nattr)
+    score=[]
+    scoreRef=[]
+    n=0
+    for j in range(0,nattr):
+        n=n+1
+        print("step %s"%n)
+        scoretemp=[-9999]*nattr
+        for k in attr_rem:
+            attr=attr_sel[:]
+            attr.append(k)
+            model.fit(X_train[:,attr], Y_train)
+            scoretemp[k]=model.score(X_test[:,attr],Y_test)
+        ind=scoretemp.index(max(scoretemp))
+        attr_sel.append(ind)
+        attr_rem.remove(ind)
+        score.append(scoretemp[ind])
+        model.fit(X_all[:,attr_sel], Y_all)
+        scoreRef.append(model.score(X_all[:,attr_sel],Y_all))
+    return attr_sel,score,scoreRef
+
+def FeatureSelectBackward(X_train,Y_train,X_test,Y_test,model):
+    X_all=np.append(X_train,X_test,axis=0)
+    Y_all=np.append(Y_train,Y_test,axis=0)
+    nattr=X_train.shape[1]
+    attr_sel=range(0,nattr)
+    attr_rem=[]
+    score=[]
+    scoreRef=[]
+    n=1 # first step: regression from all attributes
+    print("step %s"%n)
+    model.fit(X_train, Y_train)
+    score.append(model.score(X_test,Y_test))
+    model.fit(X_all, Y_all)
+    scoreRef.append(model.score(X_all,Y_all))
+    for j in range(0,nattr-1):
+        n=n+1
+        print("step %s"%n)
+        scoretemp=[-9999]*nattr
+        for k in attr_sel:
+            attr=attr_sel[:]
+            attr.remove(k)
+            model.fit(X_train[:,attr], Y_train)
+            scoretemp[k]=model.score(X_test[:,attr],Y_test)
+        ind=scoretemp.index(max(scoretemp))
+        attr_sel.remove(ind)
+        attr_rem.append(ind)
+        score.append(scoretemp[ind])
+        model.fit(X_all[:,attr_sel], Y_all)
+        scoreRef.append(model.score(X_all[:,attr_sel],Y_all))
+    attr_rem.append(attr_sel[0])    # append the last one
+    return attr_rem,score,scoreRef
+
+def FeatureSelect_plot(X_train,Y_train,X_test,Y_test,model,opt=0,figname=[]):
+    #opt=0:forward; opt=1:backward
+    nattr=X_train.shape[1]
+    nband=Y_train.shape[1]
+    if nband>10:
+        nf=[10]*int(math.ceil(nband/10))
+        nf.append(nband%10)
+    else:
+        nf=[nband]
+    k=0
+    indf=0
+    attr_all=np.ndarray([nattr,nband])
+    score_all=np.ndarray([nattr,nband])
+    scoreRef_all=np.ndarray([nattr,nband])
+    for n in nf:
+        indf=indf+1
+        f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
+        f.tight_layout()
+        f.subplots_adjust(top=0.9)
+        #plt.suptitle('Silhouette Coefficient=%s'%score)
+        for i in range(n):
+            print("calculating band%s"%k)
+            if opt==0:
+                attr,score,scoreRef=FeatureSelectForward\
+                    (X_train,Y_train[:,k],X_test,Y_test[:,k],model)
+            elif opt==1:
+                attr,score,scoreRef=FeatureSelectBackward\
+                    (X_train,Y_train[:,k],X_test,Y_test[:,k],model)
+            pj=int(np.ceil(i/2))
+            pi=int(i%2)
+            axarr[pj, pi].plot(score)
+            axarr[pj, pi].plot(scoreRef)
+            axarr[pj, pi].set_title('object %s'%k)
+            attr_all[:,k]=attr
+            score_all[:,k]=score
+            scoreRef_all[:,k]=scoreRef
+            k=k+1
+        if len(figname)!=0:
+            if len(nf)==1:
+                plt.savefig(figname)
+            else:
+                plt.savefig(figname+"f%s"%indf)
+    return attr_all,score_all,scoreRef_all
 
 def DistPlot(Xn,dist,figname,field):
+    # plot and save predictor vs distance figures
+    # Xn: predictors, nind * nattr
+    # dist: distance (or other thing), nind * ncenter
+    # field: field name and show as title
+    # figure save as figname_#attr.png
     nind,nattr=Xn.shape
     nind,nc=dist.shape
     for j in range(nattr):
