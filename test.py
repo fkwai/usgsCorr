@@ -3,6 +3,8 @@ import scipy.io as sio
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import numpy as np
+import itertools
+
 from sklearn import metrics
 from math import sqrt
 
@@ -26,13 +28,17 @@ import SSRS
 
 
 ### read data
-UCdir = "Y:\Kuai\USGSCorr\\"
+#UCdir = "Y:\Kuai\USGSCorr\\"
+UCdir = r"/Volumes/wrgroup/Kuai/USGSCorr/"
 UCfile=UCdir+"usgsCorr2.mat"
-Datafile=UCdir+"dataset2.mat"
+Datafile=UCdir+"dataset3.mat"
 mat = sio.loadmat(UCfile)
 UCData=mat['Corr_maxmin']
 mat = sio.loadmat(Datafile)
 AttrData=mat['dataset']
+Field = [str(''.join(letter)) for letter_array in mat['field'] for letter in letter_array]
+
+
 
 ## preprocessing
 X=UCData

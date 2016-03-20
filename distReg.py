@@ -19,19 +19,22 @@ from sklearn import cross_validation
 import SSRS
 
 ## read data
-UCdir = "Y:\Kuai\USGSCorr\\"
+#UCdir = "Y:\Kuai\USGSCorr\\"
+UCdir = r"/Volumes/wrgroup/Kuai/USGSCorr/"
 UCfile=UCdir+"usgsCorr2.mat"
-Datafile=UCdir+"dataset2.mat"
+Datafile=UCdir+"dataset3.mat"
 mat = sio.loadmat(UCfile)
 UCData=mat['Corr_maxmin']
 mat = sio.loadmat(Datafile)
 AttrData=mat['dataset']
-field=mat['field']
+Field=mat['field']
 figdir='Y:\\Kuai\\USGSCorr\\figures_dist\\'
 
 ## preprocessing
 Y=UCData
-X=AttrData[:,0:51]
+attrind=np.array(range(1,51)+range(62,78,3))
+Field=[Field[i] for i in range(1,51)+range(62,78,3)]
+X=AttrData[:,attrind]
 X[np.isnan(X)]=0
 scaler=preprocessing.StandardScaler().fit(X)
 Xn=scaler.fit_transform(X)
@@ -62,10 +65,10 @@ Cpca=pca.transform(center)
 
 ## rename clusters
 ythe=np.array([0.5])
-label,Cpca,center=SSRS.cluster_rename(label,ythe,Cpca,center)
+label,Cpca,center=SSRS.Cluster_rename(label,ythe,Cpca,center)
 
 ## plot PCA and cluster after resign name
-SSRS.cluster_plot(Y,label,center)
+SSRS.Cluster_plot(Y,label,center)
 plt.savefig(figdir+'Cluster')
 
 p1=plt.scatter(Ypca[:,0],Ypca[:,1],c=label)
@@ -85,11 +88,11 @@ for j in range(0,nind):
 
 ## plot attr vs dist
 figname=figdir+'\dist\dist_attr'
-SSRS.DistPlot(Xn,dist,figname,field)
+SSRS.DistPlot(Xn,dist,figname,Field)
 figname=figdir+'\dist_PCA1\distPCA1_attr'
-SSRS.DistPlot(Xn,distx,figname,field)
+SSRS.DistPlot(Xn,distx,figname,Field)
 figname=figdir+'\dist_PCA2\distPCA2_attr'
-SSRS.DistPlot(Xn,disty,figname,field)
+SSRS.DistPlot(Xn,disty,figname,Field)
 
 ## regression
 regModel=linear_model.LinearRegression()
@@ -97,8 +100,16 @@ regModel=linear_model.LinearRegression()
 regModel=KNeighborsRegressor(n_neighbors=10)
 regModel = tree.DecisionTreeRegressor()
 regModel = GaussianNB()
+regModel=tree.DecisionTreeRegressor\
+    (max_features=0.8,max_depth=30,min_samples_split=3,min_samples_leaf=5,
+     min_weight_fraction_leaf=0.5)
 
-Yp,Ytest,rmse_band=SSRS.Regression(Y=dist,X=Xn,prec=0.2,regModel=regModel,doplot=2)
+X_train,X_test,Y_train,Y_test = cross_validation.train_test_split(\
+        Xn,dist,test_size=0.2,random_state=0)
+
+Yp,rmse,rmse_train,rmse_band,rmse_band_train=SSRS.Regression\
+    (X_train,X_test,Y_train,Y_test,multiband=1,regModel=regModel,doplot=0)
+
 
 #feature selection
 X_train,X_test,Y_train,Y_test = cross_validation.train_test_split(\
