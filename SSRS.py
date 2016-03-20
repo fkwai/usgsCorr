@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import random
 import math
 from sklearn import metrics
+from sklearn import cross_validation
 
 import plotFun
 
@@ -19,9 +20,10 @@ def Cluster(data,model,doplot=1):
         Cluster_plot(data,label,center)
     return label,center
 
-def Cluster_plot(data,label,center,rank=0):
-    nclass=len(np.unique(label))
-    nind_class=np.bincount(label)
+def Cluster_plot(data,label,center=[],rank=0):
+    labeluniq=np.unique(label)
+    nclass=len(labeluniq)
+    nind_class=np.bincount(label)[labeluniq]
     if rank==1: # rank subfigures based on # of ind of each clusters
         sortind=np.argsort(nind_class)[::-1]
     else:
@@ -33,15 +35,15 @@ def Cluster_plot(data,label,center,rank=0):
     else:
         n=nclass
     f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
-    f.tight_layout()
+    #f.tight_layout()
     f.subplots_adjust(top=0.9)
     plt.suptitle('Silhouette Coefficient=%s'%score)
     for i in range(n):
         ind=sortind[i]
         pj=int(np.ceil(i/2))
         pi=int(i%2)
-        axarr[pj, pi].boxplot(data[label==ind])
-        axarr[pj, pi].set_title('cluster %s, nind=%s'%(ind,nind_class[ind]))
+        axarr[pj, pi].boxplot(data[label==labeluniq[ind]])
+        axarr[pj, pi].set_title('cluster %s, nind=%s'%(labeluniq[ind],nind_class[ind]))
         axarr[pj, pi].set_ylim([-1,1])
         if len(center)>0:
             axarr[pj, pi].plot(range(1,31),center[ind,],'*-r')
@@ -132,36 +134,43 @@ def plotErrorMap(T,Tp):
     accu=float(ncorrect)/float(len(T))
     plt.title("total accuracy %.3f"%accu)
 
-def devideset(n,rate=0.2):
-    indran=range(n)
-    random.shuffle(indran)
-    indran=np.asarray(indran)
-    ind=int(np.round(n*rate))
-    ind1=indran[range(0,ind,1)]
-    ind2=indran[range(ind+1,n,1)]
-    return(ind1,ind2)
-
-def Regression(Y,X,prec,regModel,doplot=0):
-    nind=Y.shape[0]
-    nband=Y.shape[1]
-    nattr=X.shape[1]
-
-    [indtest,indtrain]=devideset(nind,prec)
-    Ytest=Y[indtest,:]
-    Xtest=X[indtest,:]
-    Ytrain=Y[indtrain,:]
-    Xtrain=X[indtrain,:]
+def Regression(Xtrain,Xtest,Ytrain,Ytest,regModel,multiband=0,doplot=0):
+    '''
+    :param Y:
+    :param X:
+    :param prec:
+    :param regModel:
+    :param multiband: 0: each band need to be train seperately. 1: train all bands at same time (neural network)
+    :param doplot: if do plot
+    :return:
+    '''
+    nband=Ytrain.shape[1]
 
     rmse_band=np.zeros([nband,1])
-    Yp=np.zeros((len(indtest),nband))
+    rmse_band_train=np.zeros([nband,1])
+    Yp=np.zeros(Ytest.shape)
+    Yptrain=np.zeros(Ytrain.shape)
 
-    for i in range(0, nband, 1):
-        print("regressing band %i"%i)
-        regModel.fit(Xtrain, Ytrain[:,i])
-        Yp[:,i] = regModel.predict(Xtest)
-        rmse_band[i] = np.sqrt(np.mean((Yp[:,i] - Ytest[:,i])**2, axis=0))
+    if multiband==0:
+        for i in range(0, nband, 1):
+            print("regressing band %i"%i)
+            regModel.fit(Xtrain, Ytrain[:,i])
+            Yp[:,i] = regModel.predict(Xtest)
+            Yptrain[:,i] = regModel.predict(Xtrain)
+            rmse_band[i] = np.sqrt(np.mean((Yp[:,i] - Ytest[:,i])**2, axis=0))
+            rmse_band_train[i] = np.sqrt(np.mean((Yptrain[:,i] - Ytrain[:,i])**2, axis=0))
+    elif multiband==1:
+        regModel.fit(Xtrain, Ytrain)
+        Yp = regModel.predict(Xtest)
+        Yptrain = regModel.predict(Xtrain)
+        for i in range(0, nband, 1):
+            rmse_band[i] = np.sqrt(np.mean((Yp[:,i] - Ytest[:,i])**2, axis=0))
+            rmse_band_train[i] = np.sqrt(np.mean((Yptrain[:,i] - Ytrain[:,i])**2, axis=0))
+
     Regression_plot(Yp,Ytest,doplot)
-    return (Yp,Ytest,rmse_band)
+    rmse=rmse_band.mean()
+    rmse_train=rmse_band_train.mean()
+    return (Yp,rmse,rmse_train,rmse_band,rmse_band_train)
 
 def Regression_plot(Yp,Ytest,doplot):
     nband=Yp.shape[1]
@@ -182,7 +191,7 @@ def Regression_plot(Yp,Ytest,doplot):
                                     %(i,np.corrcoef(Ytest[:,i],Yp[:,i])))
             plotFun.plot121line(axarr[pj, pi])
 
-def FeatureSelectForward(X_train,Y_train,X_test,Y_test,model):
+def FeatureSelectForward(X_train,Y_train,X_test,Y_test,model,multiband=1):
     X_all=np.append(X_train,X_test,axis=0)
     Y_all=np.append(Y_train,Y_test,axis=0)
     nattr=X_train.shape[1]
@@ -198,8 +207,9 @@ def FeatureSelectForward(X_train,Y_train,X_test,Y_test,model):
         for k in attr_rem:
             attr=attr_sel[:]
             attr.append(k)
-            model.fit(X_train[:,attr], Y_train)
-            scoretemp[k]=model.score(X_test[:,attr],Y_test)
+            Yp,rmse,rmse_train,rmse_band,rmse_band_train=\
+                Regression(X_train[:,attr],X_test[:,attr],Y_train,Y_test,model,multiband=multiband,doplot=0)
+            scoretemp[k]=rmse
         ind=scoretemp.index(max(scoretemp))
         attr_sel.append(ind)
         attr_rem.remove(ind)
@@ -208,7 +218,7 @@ def FeatureSelectForward(X_train,Y_train,X_test,Y_test,model):
         scoreRef.append(model.score(X_all[:,attr_sel],Y_all))
     return attr_sel,score,scoreRef
 
-def FeatureSelectBackward(X_train,Y_train,X_test,Y_test,model):
+def FeatureSelectBackward(X_train,Y_train,X_test,Y_test,model,multiband=1):
     X_all=np.append(X_train,X_test,axis=0)
     Y_all=np.append(Y_train,Y_test,axis=0)
     nattr=X_train.shape[1]
@@ -229,8 +239,9 @@ def FeatureSelectBackward(X_train,Y_train,X_test,Y_test,model):
         for k in attr_sel:
             attr=attr_sel[:]
             attr.remove(k)
-            model.fit(X_train[:,attr], Y_train)
-            scoretemp[k]=model.score(X_test[:,attr],Y_test)
+            Yp,rmse,rmse_train,rmse_band,rmse_band_train=\
+                Regression(X_train[:,attr],X_test[:,attr],Y_train,Y_test,model,multiband=multiband,doplot=0)
+            scoretemp[k]=rmse
         ind=scoretemp.index(max(scoretemp))
         attr_sel.remove(ind)
         attr_rem.append(ind)
@@ -308,3 +319,34 @@ def DistPlot(Xn,dist,figname,field):
             axarr[pj, pi].set_title('cluster %s, coef=%.3f' % (i + 1, cf[0,1]))
         figfile=figname+'%s'%j
         plt.savefig(figfile)
+
+def traverseTree(regTree, feature_names,Xin):
+    featurename=[feature_names[i] for i in regTree.feature]
+    nnode = regTree.node_count
+    string=[""]*nnode
+    nodeind=[None]*nnode
+    nind=Xin.shape[0]
+    leaf=[]
+    label=np.zeros([nind])
+    def recurse(tempstr,node,Xtemp,indtemp):
+        string[node]="node#%i: "%node+tempstr
+        nodeind[node]=indtemp
+        if (regTree.threshold[node] != -2):
+            if regTree.children_left[node] != -1:
+                tempstr= tempstr + " ( " + featurename[node] + " <= " + "%.3f"%(regTree.threshold[node]) + " ) ->\n "
+                indlocal=np.where(Xtemp[:,regTree.feature[node]]<=regTree.threshold[node])[0]
+                indleft=[indtemp[i] for i in indlocal]
+                Xleft=Xtemp[indlocal,:]
+                recurse (tempstr,regTree.children_left[node],Xleft,indleft)
+            if regTree.children_right[node] != -1:
+                tempstr= " ( " + featurename[node] + " > " + "%.3f"%(regTree.threshold[node]) + " ) ->\n "
+                indlocal=np.where(Xtemp[:,regTree.feature[node]]>regTree.threshold[node])[0]
+                indright=[indtemp[i] for i in indlocal]
+                Xright=Xtemp[indlocal,:]
+                recurse (tempstr,regTree.children_right[node],Xright,indright)
+        else:
+            leaf.append(node)
+            label[indtemp]=node
+
+    recurse("",0,Xin,range(0,nind))
+    return string,nodeind,leaf,label
