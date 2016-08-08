@@ -20,16 +20,16 @@ from sklearn.linear_model import SGDClassifier
 from sklearn import manifold
 from sklearn import preprocessing
 from sklearn import cross_validation
-from sklearn.ensemble import RandomForestRegressor
-from sknn.mlp import Regressor, Layer
+from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor,GradientBoostingRegressor
+#from sknn.mlp import Regressor, Layer
 from sklearn.decomposition import PCA
 
 
 import SSRS
 
 ### read data
-#UCdir = "Y:\Kuai\USGSCorr\\"
-UCdir = r"/Volumes/wrgroup/Kuai/USGSCorr/"
+UCdir =r"E:\work\SSRS\\"
+#UCdir = r"/Volumes/wrgroup/Kuai/USGSCorr/"
 UCfile=UCdir+"usgsCorr2.mat"
 Datafile=UCdir+"dataset3.mat"
 mat = sio.loadmat(UCfile)
@@ -58,52 +58,99 @@ regModel=RandomForestRegressor()
 
 #regModel = BernoulliRBM(random_state=0, verbose=True)
 
-nn = Regressor(
-    layers=[
-        Layer("Sigmoid", units=200),
-        Layer("Sigmoid", units=200),
-        Layer("Linear")],
-    learning_rate=0.1,
-    n_iter=200,verbose=1)
+# nn = Regressor(
+#     layers=[
+#         Layer("Sigmoid", units=200),
+#         Layer("Sigmoid", units=200),
+#         Layer("Linear")],
+#     learning_rate=0.1,
+#     n_iter=200,verbose=1)
 
 X_train,X_test,Y_train,Y_test = cross_validation.train_test_split(\
         Xn,Y,test_size=0.2,random_state=0)
 
 # predict correlation
-Yp,rmse,rmse_train,rmse_band,rmse_band_train=SSRS.Regression\
-    (X_train,X_test,Y_train,Y_test,multiband=1,regModel=nn,doplot=0)
+Yp,Yptrain,regModelList=SSRS.Regression\
+    (X_train,X_test,Y_train,Y_test,multiband=1,regModel=regModel,doplot=0)
+rmse,rmse_band=SSRS.RMSEcal(Yp,Y_test)
+rmse_train,rmse_band_train=SSRS.RMSEcal(Yptrain,Y_train)
 print(rmse)
 print(rmse_train)
+print(np.corrcoef(Yp[:,0],Y_test[:,0]))
+
+par=[1.0,16,6,20,0.15]
+regTreeModel=tree.DecisionTreeRegressor\
+    (max_features=par[0],max_depth=par[1],min_samples_split=par[2],min_samples_leaf=par[3],
+     min_weight_fraction_leaf=par[4],max_leaf_nodes=18)
+fitModel=linear_model.LinearRegression()
+Yp,Yptrain,regTreeModel,fitModelList,predind=SSRS.RegressionTree\
+    (X_train,X_test,Y_train,Y_test,regTreeModel,fitModel,Field,doFitSelection=0)
+rmse,rmse_band=SSRS.RMSEcal(Yp,Y_test)
+rmse_train,rmse_band_train=SSRS.RMSEcal(Yptrain,Y_train)
+print(rmse)
+print(rmse_train)
+
 
 # predict correlation
 regModel=tree.DecisionTreeRegressor\
     (max_features=0.3,max_depth=20,min_samples_split=3,min_samples_leaf=5,
      min_weight_fraction_leaf=0.5)
+regModel=GradientBoostingRegressor()
 Yp,rmse,rmse_train,rmse_band,rmse_band_train=SSRS.Regression\
-    (X_train,X_test,Y_train,Y_test,prec=0.2,multiband=0,regModel=regModel,doplot=0)
+    (X_train,X_test,Y_train,Y_test,multiband=0,regModel=regModel,doplot=0)
 print(rmse)
 print(rmse_train)
+
+regModel.fit(X_train, Y_train)
+savedir=r"/Volumes/wrgroup/Kuai/USGSCorr/figure_tree/"
+savedir=r"Y:\Kuai\USGSCorr\figure_tree\\"
+with open(savedir+"tree.dot", 'w') as f:
+    f = tree.export_graphviz(regModel, out_file=f,feature_names=Field,
+                             label='none',node_ids=True)
+os.system("dot -Tpng tree.dot -o tree.png")
 
 # optimize parameters
 from scipy.optimize import differential_evolution
 
 def regtree(par,*data):
     X_train,X_test,Y_train,Y_test=data
-    regModel=tree.DecisionTreeRegressor\
+    regTreeModel=tree.DecisionTreeRegressor\
         (max_features=par[0],min_samples_split=par[1],min_samples_leaf=par[2],
          min_weight_fraction_leaf=par[3],max_leaf_nodes=int(par[4]))
-    Yp,rmse,rmse_train,rmse_band,rmse_band_train=SSRS.Regression\
-        (X_train,X_test,Y_train,Y_test,multiband=1,regModel=regModel,doplot=0)
-    print(par,rmse)
+    fitModel=linear_model.LinearRegression()
+    Yp,Yptrain,regTreeModel,fitModelList,predind=\
+        SSRS.RegressionTree(X_train,X_test,Y_train,Y_test,regTreeModel,fitModel,Field,
+                            doFitSelection=0,doMultiBand=1)
+    rmse,rmse_band=SSRS.RMSEcal(Yp,Y_test)
+    print(rmse)
     return rmse
 
 data=(X_train,X_test,Y_train,Y_test)
 bounds=[(0.001,0.999),(2,10),(2,100),(0,0.4999),(5,20)]
 result = differential_evolution(regtree, bounds, args=data,tol=0.01,mutation=1.5)
 
-par=[0.98252411,16.27840673,6.1570313,20.79552602,0.14554721]
-par=[0.8,16,6,20,0.15]
-print(regtree(par,*data))
+# 1. Predict corr band by band, 0.21991421646783735
+# par=[  0.39304037,   7.54346815,  93.41259044,   0.32280695,  18.76335834]
+# 2. Predict dist simultaneously, 0.52295255375604655
+# par=[  1.10901464e-01,4.16068961e+00,3.65341741e+01,1.34070518e-02,1.96304261e+01]
+par=[  0.39304037,   7.54346815,  93.41259044,   0.32280695,  18.76335834]
+par=[  1.10901464e-01,4.16068961e+00,3.65341741e+01,1.34070518e-02,1.96304261e+01]
+
+regTreeModel=tree.DecisionTreeRegressor\
+    (max_features=par[0],min_samples_split=par[1],min_samples_leaf=par[2],
+     min_weight_fraction_leaf=par[3],max_leaf_nodes=int(par[4]))
+fitModel=linear_model.LinearRegression()
+Yp,Yptrain,regTreeModel,fitModelList,predind=\
+    SSRS.RegressionTree(X_train,X_test,Y_train,Y_test,regTreeModel,fitModel,Field,
+                        doFitSelection=0,doMultiBand=1)
+rmse,rmse_band=SSRS.RMSEcal(Yp,Y_test)
+rmse,rmse_band=SSRS.RMSEcal(Yptrain,Y_train)
+print(rmse)
+rmse,rmse_band=SSRS.RMSEcal(Yp,Y_test)
+print(rmse)
+SSRS.Regression_plot(Yptrain,Y_train,doplot=1)
+SSRS.Regression_plot(Yp,Y_test,doplot=1)
+
 
 ## select attributes
 par=[1.0,16,6,20,0.15]
@@ -116,13 +163,13 @@ attr_sel,score,scoreRef=SSRS.FeatureSelectForward\
     (X_train,Y_train,X_test,Y_test,regModel)
 
 nf=8
-attrind=np.array(list(reversed(attr_rem))[0:nf])
-attrind=np.array(attr_sel[0:nf])
+attrsel=np.array(list(reversed(attr_rem))[0:nf])
+attrsel=np.array(attr_sel[0:nf])
 
 #attrind=np.array([44, 45, 49, 40, 19, 25, 55])
 #attrind=np.array(attr_sel[0:nf])
 
-X2=AttrData[:,attrind]
+X2=AttrData[:,attrsel]
 X2[np.isnan(X2)]=0
 scaler=preprocessing.StandardScaler().fit(X2)
 Xn2=scaler.fit_transform(X2)
@@ -140,9 +187,10 @@ print([Field[i] for i in attrind])
 ## plot tree
 regModel.fit(X2_train, Y2_train)
 savedir=r"/Volumes/wrgroup/Kuai/USGSCorr/figure_tree/"
+savedir=r"Y:\Kuai\USGSCorr\figure_tree\\"
 
 with open(savedir+"tree.dot", 'w') as f:
-    f = tree.export_graphviz(regModel, out_file=f,feature_names=[Field[i] for i in attrind],
+    f = tree.export_graphviz(regModel, out_file=f,feature_names=[Field[i] for i in attrsel],
                              label='none',node_ids=True)
 os.system("dot -Tpng tree.dot -o tree.png")
 
