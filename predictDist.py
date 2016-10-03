@@ -23,7 +23,8 @@ import SSRS
 ## read data
 #from predictCorr import Yptrain
 
-UCdir = "E:\work\SSRS\data\\"
+#UCdir = "E:\work\SSRS\data\\"
+UCdir = "D:\Kuai\SSRS\data\\"
 # UCdir = r"/Volumes/wrgroup/Kuai/USGSCorr/"
 UCfile=UCdir+"usgsCorr_mB_4949.mat"
 Datafile=UCdir+"dataset_mB_4949.mat"
@@ -63,15 +64,15 @@ Xn=scaler.fit_transform(X)
 [nind,nband]=Y.shape
 [nind,nattr]=X.shape
 
-# # test for k in kmean
-# score_cluster=np.zeros(8)
-# for i in range(2,10):
-#     print(i)
-#     nc=i
-#     model = KMeans(init='k-means++', n_clusters=nc, n_init=10, max_iter=1000)
-#     label,center=SSRS.Cluster(Y, model,doplot=0)
-#     score_cluster[i-2]=metrics.silhouette_score(Y,label)
-# plt.plot(range(2,10),score_cluster,'-*')
+# test for k in kmean
+score_cluster=np.zeros(8)
+for i in range(2,10):
+    print(i)
+    nc=i
+    model = KMeans(init='k-means++', n_clusters=nc, n_init=10, max_iter=1000)
+    label,center=SSRS.Cluster(Y, model,doplot=0)
+    score_cluster[i-2]=metrics.silhouette_score(Y,label)
+plt.plot(range(2,10),score_cluster,'-*')
 
 ## cluster
 nc=6
@@ -210,6 +211,9 @@ SSRS.Regression_plot(Yptrain,Y_train,doplot=2)
 SSRS.Regression_plot(Yp,Y_test,doplot=2)
 
 # 3. select predictors
+ind=range(0,nind)
+X_train,X_test,Y_train,Y_test,ind_train,ind_test = \
+    cross_validation.train_test_split(Xn,dist,ind,test_size=0.2,random_state=0)
 # forward
 regTreeModel=tree.DecisionTreeRegressor(max_leaf_nodes=20)
 fitModel=linear_model.LinearRegression()
@@ -219,10 +223,21 @@ attr_sel1,score1,scoreRef1=attr_sel,score,scoreRef
 plt.figure()
 plt.plot(score1,'-*b')
 plt.plot(scoreRef1,'-*g')
-
 #selmatfile=r"E:\work\SSRS\data\py_sel_14_4881.mat"
-selmatfile=r"E:\work\SSRS\data\py_sel_mB_4949.mat"
+selmatfile=r"D:\Kuai\SSRS\data\py_selforward_mB_4949.mat"
 sio.savemat(selmatfile,{"attr_sel":attr_sel,"score":score,"scoreRef":scoreRef})
+
+#backward
+regTreeModel=tree.DecisionTreeRegressor(max_leaf_nodes=20)
+fitModel=linear_model.LinearRegression()
+attr_sel,score,scoreRef=SSRS.FeatureSelectBackward_RegTree\
+    (X_train,X_test,Y_train,Y_test,regTreeModel,fitModel,Field,doFitSelection=0,doMultiBand=1)
+attr_sel2,score2,scoreRef2=attr_sel,score,scoreRef
+plt.plot(score2,'-*b')
+plt.plot(scoreRef2,'-*g')
+selmatfile=r"D:\Kuai\SSRS\data\py_selbackward_mB_4949.mat"
+sio.savemat(selmatfile,{"attr_sel":attr_sel,"score":score,"scoreRef":scoreRef})
+
 
 nsel=8
 predSel=attr_sel1[0:nsel]
@@ -518,7 +533,7 @@ predListmatfile=r"E:\work\SSRS\data\py_predList_mB_4949.mat"
 sio.savemat(predListmatfile,{"predListTest":predListTest})
 
 # test 4: try specific cases
-savedir=r"Y:\Kuai\SSRS\trees\\"
+savedir=r"D:\Kuai\SSRS\tree\\"
 nmList=[15,53,20,73,102]
 for nm in nmList:
     predSel=predListTest[nm-1]

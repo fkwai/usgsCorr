@@ -7,6 +7,9 @@ import copy
 from sklearn import metrics
 from sklearn import cross_validation
 from matplotlib import gridspec
+import itertools
+from time import clock
+import scipy.io as sio
 
 import plotFun
 
@@ -167,13 +170,14 @@ def Regression(X_train,X_test,Y_train,Y_test,regModel,multiband=0,doplot=0):
     return (Yp,Yptrain,regModelList)
 
 def Regression_plot(Yp,Ytest,doplot):
-    nband=Yp.shape[1]
     rmse,rmse_band=RMSECal(Yp,Ytest)
     if doplot==1:   # box plot for all bands
+        nband = Yp.shape[1]
         plt.figure()
         plt.boxplot(Yp-Ytest)
         #plt.title("Pred - Truth, total rmse %.3f"%np.mean(rmse_band))
     elif doplot==2:
+        nband = Yp.shape[1]
         n=nband
         f, axarr = plt.subplots(int(np.ceil(n/2)), 2)
         f.tight_layout()
@@ -629,11 +633,11 @@ def FeatureSelectBackward_RegTree(X_train,X_test,Y_train,Y_test,regTreeModel,fit
         attr_sel.remove(ind)
         attr_rem.append(ind)
         score.append(scoretemp[ind])
-    Yp,Yptrain,regTreeModel,fitModelList,predind=\
-        RegressionTree(X_train[:,attr_sel],X_test[:,attr_sel],Y_train,Y_test,regTreeModel,fitModel,Field,
-                       doFitSelection=doFitSelection,doMultiBand=doMultiBand)
-    rmse,rmse_band=RMSECal(Yptrain,Y_train)
-    scoreRef.append(rmse)
+        Yp,Yptrain,regTreeModel,fitModelList,predind=\
+            RegressionTree(X_train[:,attr_sel],X_test[:,attr_sel],Y_train,Y_test,regTreeModel,fitModel,Field,
+                           doFitSelection=doFitSelection,doMultiBand=doMultiBand)
+        rmse,rmse_band=RMSECal(Yptrain,Y_train)
+        scoreRef.append(rmse)
     attr_rem.append(attr_sel[0])    # append the last one
     return attr_rem,score,scoreRef
 
@@ -689,8 +693,45 @@ def TreePlot(savedir,X_train,X_test,Y_train,Y_test,regTreeModel,Field,fitModelLi
     traverseplot(X_train,Y_train,Field,"Train")
     traverseplot(X_test,Y_test,Field,"Test")
 
+def Tree2Mat(regTree,predSel,Field,treeMatFile,X,Xn,ind_train,ind_test,Y_train,Y_test,Yp,Yptrain):
+    predName=[Field[i] for i in predSel]
+
+    # calculate actual threshold.
+    nnode=regTree.node_count
+    the=np.zeros([nnode])
+    fieldInd=regTree.feature
+    nodeValue=regTree.value
+    for i in range(0,nnode):
+        if regTree.feature[i]!=-2:
+            v=regTree.threshold[i]
+            tempi=predSel[regTree.feature[i]]
+            tempj=np.argmin(np.abs(Xn[:,tempi]-v))
+            vout=X[tempj,tempi]
+            the[i]=vout
+            print("node %i, field %s, v=%f"%(i,Field[tempi],vout))
+
+    string_all,nodeind_all,leaf_all,label_all=\
+        TraverseTree(regTree, Xn[:,predSel], predName)
+    string_train,nodeind_train,leaf_train,label_train=\
+        TraverseTree(regTree,Xn[ind_train,:][:,predSel],predName)
+    string_test,nodeind_test,leaf_test,label_test=\
+        TraverseTree(regTree,Xn[ind_test,:][:,predSel],predName)
+
+    sio.savemat(treeMatFile,
+                {'predSel':predSel,
+                 "nodeind":nodeind_all,"nodeind_train":nodeind_train,
+                 "nodeind_test":nodeind_test,"the":the,
+                 "ind_train":ind_train,"ind_test":ind_test,
+                 "cleft":regTree.children_left,"cright":regTree.children_right,
+                 "fieldInd":fieldInd,"nodeValue":nodeValue,
+                 "Yp":Yp,"Yptrain":Yptrain,
+                 "Y_train":Y_train,"Y_test":Y_test})
+
 
 def RMSECal(x,y):
+    if x.shape.__len__()==1:
+        x = np.reshape(x, (-1, 1))
+
     nband=x.shape[1]
     rmse_band=np.zeros([nband,1])
     for i in range(0, nband, 1):
